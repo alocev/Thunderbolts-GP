@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
-import requests
-from PIL import Image
-from io import BytesIO
+import random
 
 #carregamento de dados
 if "df" not in st.session_state:
@@ -11,48 +9,186 @@ if "df" not in st.session_state:
 #configuração da página
 st.set_page_config(
     page_title= "Gestão de Equipes",
-    page_icon= "🗃️",
+    page_icon= "🏷️",
     layout= "wide")
 
 #configuração sidebar
-st.sidebar.title("Navegação")
-aba = st.sidebar.radio("Ir para:", ["👤 Visualizar Membros", "➕ Adicionar Novo", "⚙️ Configurações Extras"])
+st.sidebar.title("NAVEGAÇÃO")
+aba = st.sidebar.radio("Ir para:", ["👁️‍🗨️ Visão Geral","👤 Visualizar Membros", "➕ Adicionar Novo", "🗃️ Gerenciar Registros"])
 
+#visão geral
+if aba == "👁️‍🗨️ Visão Geral":
+    st.header("🖇️ Visão geral")
+    st.divider()
+    #cards de atividade
+    ativos = st.session_state.df[st.session_state.df["STATUS"] == "Ativo"].shape[0]
+    inativos = st.session_state.df[st.session_state.df["STATUS"] == "Inativo"].shape[0]
+    qtd_equipes = st.session_state.df["EQUIPE DE PROJETO"].nunique()
+    col1, col2, col3 = st.columns(3)
+    card_style = """
+    background-color:#262730;
+    width:145px;
+    height:145px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border: 3px solid #22232B;
+    border-radius:20px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    position:relative;
+    color:white;
+    font-weight:bold;
+    font-size:64px;
+    margin:auto;"""
+    with col1:
+        st.markdown(f"""<div style="{card_style}"> {ativos}
+        <div style="position:absolute; bottom:12px; right:12px; width:19px; height:19px; border-radius:50%; background-color:#28a745;"></div>
+    </div>
+    <p style="text-align:center; color:#28a745; font-weight:bold; margin-top:8px;">Membros ativos</p>
+    """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""<div style="{card_style}"> {inativos}
+        <div style="position:absolute; bottom:12px; right:12px; width:19px; height:19px; border-radius:50%; background-color:#DC2F36;"></div>
+    </div>
+    <p style="text-align:center; color:#DC2F36; font-weight:bold; margin-top:8px;">Membros inativos</p>
+    """, unsafe_allow_html=True)
+        with col3:
+            st.markdown(f"""<div style="{card_style}"> {qtd_equipes}
+    </div>
+    <p style="text-align:center; color:#707070; font-weight:bold; margin-top:8px;">Equipes</p>
+    """, unsafe_allow_html=True)
+    st.divider()
+    #cards equipes
+    st.subheader("Resumo por Equipe")
+    df = st.session_state.df.copy()
+    df["STATUS_NORMALIZADO"] = df["STATUS"].astype(str).str.lower().str.strip()
+    df["EQUIPE DE PROJETO"] = df["EQUIPE DE PROJETO"].astype(str).str.strip()
+    resumo_equipes = df.groupby("EQUIPE DE PROJETO")["STATUS_NORMALIZADO"].value_counts().unstack().fillna(0)
+    cards_equipe = ""
+    for equipe, row in resumo_equipes.iterrows():
+        ativos = int(row.get("ativo", 0))
+        inativos = int(row.get("inativo", 0))
+        cards_equipe += f"""<div class="card">
+        <div style="font-size: 1.25rem; font-weight: bold; text-align: center; margin-bottom: 0.5rem;">{equipe}</div>
+        <p class="ativo">{ativos} ativo(s)</p>
+        <p class="inativo">{inativos} inativo(s)</p>
+    </div>"""
+    st.markdown("""
+<style>
+.scroll-container {
+    display: flex;
+    overflow-x: auto;
+    padding: 1rem 0;
+    gap: 1rem;}
+.card {
+    background-color: #262730;
+    color: white;
+    padding: 1rem;
+    border: 3px solid #22232B;
+    border-radius: 12px;
+    min-width: 220px;
+    flex-shrink: 0;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    text-align: center;
+    font-family: "Segoe UI", sans-serif;}
+.card h4 {
+    margin-bottom: 0.5rem;}
+.card .ativo {
+    color: #28a745;
+    font-weight: bold;
+    margin: 4px 0 2px 0;
+    text-align: center;}
+.card .inativo {
+    color: #DC2F36;
+    font-weight: bold;
+    margin: 2px 0 0 0;
+    text-align: center;}
+</style>""", unsafe_allow_html=True)
+    st.markdown(f"""
+<div class="scroll-container">
+    {cards_equipe}
+</div>""", unsafe_allow_html=True)
+    #filtro orientadores
+    st.subheader("Orientadores")
+    orientadores = sorted(st.session_state.df["ORIENTADOR"].dropna().unique())
+    options_orientadores = ["Todos"] + orientadores
+    orientador_select = st.selectbox("Selecionar orientador:", options_orientadores)
+    st.divider()
+    def render_orientador_card(nome, orientandos):
+        st.markdown(f"""
+            <div style="
+            background-color: #262730;
+            padding: 16px;
+            border: 3px solid #22232B;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+            <h4 style="
+                margin: 0 0 8px 0;
+                text-align: left;
+                font-weight: bold;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                color: white;">
+                👨‍🏫 {nome} | {len(orientandos)} orientandos</h4>
+            <details>
+                <summary style="cursor: pointer; font-weight: 500; color: #28a745;">Visualizar orientandos</summary>
+                <ul style="margin-top: 8px;">
+                    {''.join(f"<li>{row['NOME']}</li>" for _, row in orientandos.iterrows())}
+                </ul>
+            </details>
+        </div>""", unsafe_allow_html=True)
+    if orientador_select == "Todos":
+        for orientador in orientadores:
+            df_orientador = st.session_state.df[st.session_state.df["ORIENTADOR"] == orientador]
+            render_orientador_card(orientador, df_orientador)
+    else:
+        df_orientador = st.session_state.df[st.session_state.df["ORIENTADOR"] == orientador_select]
+        render_orientador_card(orientador_select, df_orientador)
+            
 #visualizar membros
-if aba == "👤 Visualizar Membros":
+elif aba == "👤 Visualizar Membros":
     st.subheader("Lista de Membros")
     equipes = sorted(st.session_state.df["EQUIPE DE PROJETO"].dropna().unique())
     equipe_select = st.selectbox("Filtrar por Equipe:", ["Todas"] + equipes)
-    #busca por nome
-    busca_nome = st.text_input("Buscar por nome:").strip()
+    #busca escrita
+    busca = st.text_input("Buscar por nome/CPF/matrícula:").strip()
     df_filtrado = st.session_state.df.copy()
     if equipe_select != "Todas":
-        df_filtrado = df_filtrado[df_filtrado["EQUIPE DE PROJETO"] == equipe_select]
-    if busca_nome:
-        df_filtrado = df_filtrado[df_filtrado["NOME"].str.contains(busca_nome, case = False, na = False)]
+        df_filtrado = df_filtrado[df_filtrado["EQUIPE DE PROJETO"].str.contains(equipe_select, na=False)]
+    if busca:
+        colunas_busca = ["NOME", "CPF", "MATRÍCULA"]
+        busca_normal = busca.lower()
+        mask = df_filtrado[colunas_busca].apply(
+        lambda col: col.astype(str).str.lower().str.contains(busca_normal, na=False)).any(axis=1)
+        df_filtrado = df_filtrado[mask]
+    st.divider()
     #exibir cards
     st.subheader(f"Resultados encontrados: {len(df_filtrado)}")
     for _, membro in df_filtrado.iterrows():
         with st.container():
             col1, col2 = st.columns([1, 4])
             with col1:
-                try:
-                    response = requests.get(membro["IMAGEM_USUÁRIO"])
-                    avatar = Image.open(BytesIO(response.content))
-                    st.image(avatar, width=195)
-                except:
-                    st.write("[sem avatar]")
+                estilo_avatar = "pixel-art"
+                cores = ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf"]
+                cor_fundo = random.choice(cores)
+                identificador = membro["MATRÍCULA"]
+                url_avatar = f"https://api.dicebear.com/7.x/{estilo_avatar}/svg?seed={identificador}&backgroundColor={cor_fundo}"
+                st.image(url_avatar, width=192)
             with col2:
                 status_key = f"status_{membro['MATRÍCULA']}"
                 status_ativo = st.toggle("Ativo", value=(membro["STATUS"].strip().lower() == "ativo"), key=status_key)
                 cor_status = "limegreen" if status_ativo else "tomato"
                 texto_status = "Ativo" if status_ativo else "Inativo"
+                detalhes = f"detalhes_{membro['MATRÍCULA']}"
                 st.markdown(f"""
-                <div style="background-color:#2c2c2c;padding:20px;border-radius:12px">
+                <div style="background-color:#262730;padding:20px;border-radius:12px">
                     <h3 style="margin-bottom:5px;">{membro["NOME"]}</h3>
                     <p><strong>Curso:</strong> {membro["CURSO"]} &nbsp;|&nbsp;
-                    <strong>Equipe:</strong> {membro["EQUIPE DE PROJETO"]} &nbsp;|&nbsp;
+                    <strong>Equipe:</strong> {membro["EQUIPE DE PROJETO"].replace(";", ", ")} &nbsp;|&nbsp;
                     <strong>Status:</strong> <span style="color:{cor_status}; font-weight:bold">{texto_status}</span></p>
+                    <details style="margin-top:10px;">
+                    <summary style="cursor: pointer; font-weight: 500; color: white;">Mais detalhes</summary>
+                    <div style="margin-top:8px; font-size:0.95rem;">
                     <hr style="margin:10px 0;"> <p>
                     <strong>Email:</strong> {membro["EMAIL"]}<br>
                     <strong>Contato:</strong> {membro["CONTATO"]}<br>
@@ -68,7 +204,9 @@ if aba == "👤 Visualizar Membros":
                     <strong>Rank GP:</strong> {membro["RANK GP"]}<br>
                     <strong>Orientador:</strong> {membro["ORIENTADOR"]}
                     </p>
-                </div> """, unsafe_allow_html=True)
+                   </div>
+            </details>
+        </div>""", unsafe_allow_html=True)
         st.divider()
 
 #adicionar novo
@@ -87,7 +225,7 @@ elif aba == "➕ Adicionar Novo":
             matricula = st.text_input("Matrícula")
             tamanho_camiseta = st.selectbox("Tamanho da camiseta", ["PP", "P", "M", "G", "GG", "XGG"])
             data_nascimento = st.date_input("Data de nascimento")
-            equipe_projeto = st.selectbox("Equipe do projeto", options=st.session_state.df["EQUIPE DE PROJETO"].unique())
+            equipe_projeto = st.multiselect("Equipes do projeto", options=sorted(st.session_state.df["EQUIPE DE PROJETO"].dropna().unique()))
             orientador = st.text_input("Orientador")
             serie = st.selectbox("Série", ["1º ano", "2º ano", "3º ano"])
             ano = st.number_input("Ano", min_value=2020, max_value=2030, step=1, value=2025)
@@ -110,7 +248,7 @@ elif aba == "➕ Adicionar Novo":
                     "MATRÍCULA": matricula,
                     "TAMANHO CAMISETA": tamanho_camiseta,
                     "DATA NASCIMENTO": data_nascimento.strftime("%Y-%m-%d"),
-                    "EQUIPE DE PROJETO": equipe_projeto,
+                    "EQUIPE DE PROJETO": ";".join(equipe_projeto),
                     "ORIENTADOR": orientador,
                     "SÉRIE": serie,
                     "ANO": ano,
@@ -159,4 +297,27 @@ elif aba == "➕ Adicionar Novo":
                 st.session_state.df = pd.concat([st.session_state.df, pd.DataFrame([nova_linha])], ignore_index=True)
                 st.success(f"Equipe '{nome_equipe}' adicionada com sucesso!")
 
-#configurações extras
+#gerenciar registros
+else:
+    st.title("Gerenciamento de equipes")
+    st.write("Aqui deve ter a funcionalidade para desativar ou ativar equipes, sem remover de uma vez.")
+    st.title("Remover Registros")
+    options_remove = st.radio("O que deseja remover?", ["Membro", "Equipe"])
+    if options_remove == "Membro":                          # >> arrumar
+        nomes = st.session_state.df["NOME"].tolist()
+        membro_select = [f"{row["NOME"]} - {row["EQUIPE DE PROJETO"]}" for _, row in st.session_state.df.iterrows()]
+        remove_select = st.selectbox("Selecione o membro que deseja remover:", membro_select)
+        if st.button("Remover membro", type = "primary"):
+            nome_select, equipe_select2 = remove_select.split(" - ")
+            df_filtrado = st.session_state.df
+            st.session_state.df = df_filtrado[
+                ~((df_filtrado["NOME"] == nome_select) & (df_filtrado["EQUIPE DE PROJETO"] == equipe_select2))]
+            st.success(f"Membro {nome_select} da equipe {equipe_select2} foi removido com sucesso!")
+    else:
+        equipes_open = st.session_state.df["EQUIPE DE PROJETO"].unique().tolist()
+        equipe_select3 = st.selectbox("Selecione a equipe que deseja remover por inteiro:", equipes_open)
+        membros_equipe = st.session_state.df[st.session_state.df["EQUIPE DE PROJETO"] == equipe_select3]
+        st.write(f"Essa equipe possui {len(membros_equipe)} membro(s).")
+        if st.button("Remover equipe", type = "primary"):
+            st.session_state.df = st.session_state.df[st.session_state.df["EQUIPE DE PROJETO"] != equipe_select3]
+            st.success(f"Equipe {equipe_select3} e todos os seus membros foram removidos com sucesso!")
