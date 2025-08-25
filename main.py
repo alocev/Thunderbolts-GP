@@ -5,6 +5,7 @@ import random
 #carregamento de dados
 if "df" not in st.session_state:
     st.session_state.df = df = pd.read_csv('database/membros_gp_fakes.csv', sep = ',')
+atividade_equipes = (st.session_state.df.groupby("EQUIPE DE PROJETO")["STATUS"].apply(lambda x: (x == "Ativo").sum()).reset_index(name="membros_ativos"))
 
 #configuração da página
 st.set_page_config(
@@ -267,7 +268,7 @@ elif aba == "➕ Adicionar Novo":
             nome_equipe = st.text_input("Nome da equipe")
             descricao = st.text_area("Descrição (opcional)")
             orientador = st.text_input("Orientador responsável")
-            status_equipe = st.selectbox("Status da equipe", ["Ativa", "Inativa", "Parcialmente Ativa"])
+            status_equipe = st.selectbox("Status da equipe", ["Ativa", "Inativa"])
             enviado_equipe = st.form_submit_button("Adicionar equipe")
             if enviado_equipe:
                 if nome_equipe in st.session_state.df["EQUIPE DE PROJETO"].unique():
@@ -300,10 +301,44 @@ elif aba == "➕ Adicionar Novo":
 #gerenciar registros
 else:
     st.title("Gerenciamento de equipes")
-    st.write("Aqui deve ter a funcionalidade para desativar ou ativar equipes, sem remover de uma vez.")
+    atividade_equipes = atividade_equipes.rename(columns={"EQUIPE DE PROJETO": "Equipe", "membros_ativos": "Membros Ativos", "STATUS_EQUIPE": "Status"})
+    atividade_equipes["Status"] = atividade_equipes["Membros Ativos"].apply(lambda n: "Ativa" if n >= 2 else "Inativa")
+    st.subheader("Status das equipes")
+    st.markdown("""
+    <style>
+    .custom-table {
+        width: 100%;
+        border-collapse: collapse;
+        border-radius: 16px;
+        overflow: hidden;
+        align-items:center;
+        background-color: #262730;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);}
+    .custom-table th {
+        background-color: #FF4B4B;
+        color: white;
+        padding: 10px;
+        text-align: center;}
+    .custom-table td {
+        padding: 10px;
+        text-align: center;
+        border-bottom: 1px solid #ddd;}
+    .custom-table tr:hover {
+        background-color: #2E303B;}
+    .status-ativa {
+        color: #28a745;
+        font-weight: bold;}
+    .status-inativa {
+        color: #DC2F36;
+        font-weight: bold;}
+    </style>""", unsafe_allow_html=True)
+    html_table = atividade_equipes.to_html(classes="custom-table", index = False, escape = False)
+    html_table = html_table.replace("Ativa", "<span class='status-ativa'>Ativa</span>")
+    html_table = html_table.replace("Inativa", "<span class='status-inativa'>Inativa</span>")
+    st.markdown(html_table, unsafe_allow_html=True)
     st.title("Remover Registros")
     options_remove = st.radio("O que deseja remover?", ["Membro", "Equipe"])
-    if options_remove == "Membro":                          # >> arrumar
+    if options_remove == "Membro":                          
         nomes = st.session_state.df["NOME"].tolist()
         membro_select = [f"{row["NOME"]} - {row["EQUIPE DE PROJETO"]}" for _, row in st.session_state.df.iterrows()]
         remove_select = st.selectbox("Selecione o membro que deseja remover:", membro_select)
